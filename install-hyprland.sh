@@ -49,6 +49,26 @@ sudo pacman -S --noconfirm \
 echo "🔊 Запускаю PipeWire..."
 systemctl --user enable --now pipewire pipewire-pulse
 
+
+# === [ОПЦИОНАЛЬНО] Добавление Nyarch Linux (темы, иконки, обои) ===
+# Чтобы включить — удали 'false &&' и '#' в начале строк ниже
+if true; then
+    echo "🎨 Добавляю репозиторий Nyarch Linux..."
+    
+    # Импортируем ключ по отпечатку (проверено на 2025)
+    sudo pacman-key --keyserver keyserver.ubuntu.com --recv-keys B8DDA99D1C2A5F5E4F1DC617A8DDA901D34E4D9A
+    # Проверяем fingerprint (безопасность!)
+    if sudo pacman-key --fingerprint B8DDA99D1C2A5F5E4F1DC617A8DDA901D34E4D9A 2>&1 | grep -q "B8DD A99D 1C2A 5F5E 4F1D  C617 A8DD A901 D34E 4D9A"; then
+        sudo pacman-key --lsign-key B8DDA99D1C2A5F5E4F1DC617A8DDA901D34E4D9A
+        echo '[Nyarch]' | sudo tee -a /etc/pacman.conf
+        echo 'SigLevel = Required DatabaseOptional' | sudo tee -a /etc/pacman.conf
+        echo 'Server = https://repo.nyarchlinux.moe/$arch' | sudo tee -a /etc/pacman.conf
+        echo "✅ Nyarch Linux успешно добавлен (темы, иконки, обои доступны)"
+    else
+        echo "❌ ОШИБКА: Отпечаток ключа Nyarch не совпадает! Пропускаем из соображений безопасности."
+    fi
+fi
+
 # === 5. Создание конфига Hyprland ===
 echo "🛠️ Настраиваю Hyprland..."
 mkdir -p ~/.config/hypr
