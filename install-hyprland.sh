@@ -1,98 +1,114 @@
 #!/bin/bash
-# install-hyprland.sh for ArcHIChanAdmin
-# Fully automatic Hyprland setup on clean Arch (AMD)
+# install-hyprland.sh — полная автоматическая установка Hyprland для ArcHIChanAdmin
+# Работает на реальном AMD-железе и в VirtualBox
 
 set -e
 
-echo "🚀 Скрипт запущен. Устанавливаю Hyprland..."
+echo "🚀 Запуск установки Hyprland для ArcHIChanAdmin..."
 
-# === 1. Обновление системы и зависимости ===
-echo "📦 Обновляю систему..."
+# === 1. Обновление системы ===
+echo "📦 Обновление системы..."
 sudo pacman -Syu --noconfirm
 
-echo "🔧 Ставлю базовые зависимости..."
-sudo pacman -S --noconfirm base-devel git wget
+# === 2. Установка базовых зависимостей ===
+echo "🔧 Установка зависимостей..."
+sudo pacman -S --noconfirm base-devel git wget curl
 
-# === 2. Добавление Chaotic-AUR ===
-echo "🔑 Импортирую GPG-ключ Chaotic-AUR..."
+# === 3. Включение multilib (для Steam и 32-битных приложений) ===
+if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
+    echo "💿 Включение multilib..."
+    sudo sed -i '/^\[multilib\]/,/Include =/s/^#//' /etc/pacman.conf
+    sudo pacman -Sy --noconfirm
+fi
+
+# === 4. Настройка российских зеркал через reflector ===
+echo "🇷🇺 Настройка российских зеркал..."
+sudo pacman -S --noconfirm reflector
+sudo reflector --country Russia --age 12 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+sudo pacman -Sy --noconfirm
+
+# === 5. Добавление Chaotic-AUR (без git clone!) ===
+echo "🔑 Импорт ключа Chaotic-AUR..."
 sudo pacman-key --keyserver keyserver.ubuntu.com --recv-keys 3056513887B78AEB
 sudo pacman-key --lsign-key 3056513887B78AEB
 
-echo "📥 Скачиваю keyring и mirrorlist..."
+echo "📥 Установка chaotic-keyring и chaotic-mirrorlist..."
 wget -qO /tmp/chaotic-keyring.pkg.tar.zst 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst'
 wget -qO /tmp/chaotic-mirrorlist.pkg.tar.zst 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
 sudo pacman -U --noconfirm /tmp/chaotic-keyring.pkg.tar.zst /tmp/chaotic-mirrorlist.pkg.tar.zst
 
-echo "📝 Добавляю репозиторий в pacman.conf..."
+echo "📝 Добавление репозитория в pacman.conf..."
 echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" | sudo tee -a /etc/pacman.conf
-
-# === 3. Установка Hyprland и окружения ===
-echo "🖥️ Устанавливаю Hyprland и сопутствующие пакеты..."
 sudo pacman -Sy --noconfirm
+
+# === 6. Установка Hyprland и всего окружения ===
+echo "🖥️ Установка Hyprland, Steam, окружения..."
 sudo pacman -S --noconfirm \
     hyprland \
     waybar \
     wofi \
     foot \
-    kitty \
-    swaybg \
-    grim \
-    slurp \
-    swappy \
+    fish \
+    dolphin \
     thunar \
     xdg-desktop-portal-hyprland \
-    pipewire \
-    pipewire-pulse \
-    pipewire-jack
+    mesa \
+    vulkan-radeon \
+    lib32-mesa \
+    lib32-vulkan-radeon \
+    steam \
+    proton-ge-custom \
+    noto-fonts \
+    ttf-liberation \
+    gamemode
 
-# === 4. Запуск PipeWire ===
-echo "🔊 Запускаю PipeWire..."
-systemctl --user enable --now pipewire pipewire-pulse
+# === 7. Настройка локалей (en_US + ru_RU) ===
+echo "🌍 Настройка языка и раскладки..."
+sudo sed -i 's/^#\(en_US.UTF-8\)/\1/' /etc/locale.gen
+sudo sed -i 's/^#\(ru_RU.UTF-8\)/\1/' /etc/locale.gen
+sudo locale-gen
+echo "LANG=en_US.UTF-8" | sudo tee /etc/locale.conf
 
-
-# === [ОПЦИОНАЛЬНО] Добавление Nyarch Linux (темы, иконки, обои) ===
-# Чтобы включить — удали 'false &&' и '#' в начале строк ниже
-if true; then
-    echo "🎨 Добавляю репозиторий Nyarch Linux..."
-    
-    # Импортируем ключ по отпечатку (проверено на 2025)
-    sudo pacman-key --keyserver keyserver.ubuntu.com --recv-keys B8DDA99D1C2A5F5E4F1DC617A8DDA901D34E4D9A
-    # Проверяем fingerprint (безопасность!)
-    if sudo pacman-key --fingerprint B8DDA99D1C2A5F5E4F1DC617A8DDA901D34E4D9A 2>&1 | grep -q "B8DD A99D 1C2A 5F5E 4F1D  C617 A8DD A901 D34E 4D9A"; then
-        sudo pacman-key --lsign-key B8DDA99D1C2A5F5E4F1DC617A8DDA901D34E4D9A
-        echo '[Nyarch]' | sudo tee -a /etc/pacman.conf
-        echo 'SigLevel = Required DatabaseOptional' | sudo tee -a /etc/pacman.conf
-        echo 'Server = https://repo.nyarchlinux.moe/$arch' | sudo tee -a /etc/pacman.conf
-        echo "✅ Nyarch Linux успешно добавлен (темы, иконки, обои доступны)"
-    else
-        echo "❌ ОШИБКА: Отпечаток ключа Nyarch не совпадает! Пропускаем из соображений безопасности."
-    fi
-fi
-
-# === 5. Создание конфига Hyprland ===
-echo "🛠️ Настраиваю Hyprland..."
+# === 8. Создание конфига Hyprland ===
+echo "🛠️ Настройка Hyprland..."
 mkdir -p ~/.config/hypr
 
 cat > ~/.config/hypr/hyprland.conf <<'EOF'
-# Hyprland config — создано для ArcHIChanAdmin
+# Hyprland config — ArcHIChanAdmin Edition
 
-# Автозапуск
+# Input
+input {
+    kb_layout = us,ru
+    kb_options = grp:alt_shift_toggle
+}
+
+# Environment
+env = XDG_CURRENT_DESKTOP,Hyprland
+env = SDL_VIDEODRIVER,wayland
+env = MOZ_ENABLE_WAYLAND,1
+
+# Autostart
 exec-once = waybar
-exec-once = swaybg -c '#1e1e2e'
+exec-once = swaybg -c '#2e3440'
 
-# Горячие клавиши
-bind = SUPER, Return, exec, kitty
-bind = SUPER, W, exec, firefox
+# Keybinds
+bind = SUPER, T, exec, foot
+bind = SUPER, E, exec, dolphin
+bind = SUPER, S, exec, wofi --show drun
+bind = SUPER, G, exec, steam
 bind = SUPER, Q, killactive,
 bind = SUPER, M, exit,
 
-# Тайлинг
-layout = dwindle
+# Window rules
+dwindle {
+    pseudotile = yes
+    preserve_split = yes
+}
 
-# Монитор (автоопредление)
+# Monitor
 monitor = ,preferred,auto,1
 
-# Декорации
+# Decorations
 decoration {
     rounding = 8
     blur {
@@ -101,16 +117,51 @@ decoration {
     }
 }
 
-# Окна
+# Gaps
 general {
     gaps_in = 5
     gaps_out = 10
 }
 EOF
 
-# === 6. Завершение ===
+# === 9. Настройка пользователя: fish + foot + dolphin ===
+echo "🐚 Настройка fish + foot + dolphin..."
+
+# Сделать fish оболочкой по умолчанию
+chsh -s /usr/bin/fish
+
+# Конфиг foot
+mkdir -p ~/.config/foot
+cat > ~/.config/foot/foot.ini <<'EOF'
+[main]
+font = JetBrainsMono Nerd Font:size=10
+term = xterm-256color
+
+[colors]
+background = 2e3440
+foreground = eceff4
+cursor = eceff4
+EOF
+
+# Ассоциации приложений
+mkdir -p ~/.config
+cat > ~/.config/mimeapps.list <<'EOF'
+[Default Applications]
+text/plain=foot.desktop
+inode/directory=org.kde.dolphin.desktop
+
+[Added Associations]
+text/plain=foot.desktop
+inode/directory=org.kde.dolphin.desktop
+EOF
+
+# === 10. Запуск служб ===
+echo "🔊 Запуск фоновых служб..."
+systemctl --user enable --now pipewire pipewire-pulse gamemoded
+
+# === 11. Завершение ===
 echo ""
-echo "✅ ВСЁ ГОТОВО!"
+echo "✅ ГОТОВО! ArcHIChanAdmin Edition установлен."
 echo "Чтобы запустить Hyprland:"
 echo "  1. Переключись в tty1: Ctrl+Alt+F1"
 echo "  2. Залогинься как Kanna4ka"
